@@ -467,7 +467,7 @@
     </div>
     
     <script>
-        // Utility functions
+       // Utility functions
         const DateUtils = {
             formatDateForInput: date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
             formatDateForAPI: dateString => {
@@ -477,6 +477,135 @@
                     String(date.getMonth() + 1).padStart(2, '0'),
                     date.getFullYear()
                 ].join('-');
+            },
+            
+            // New utility for manual date formatting
+            formatManualInput: (input) => {
+                // Remove all non-numeric characters
+                let cleaned = input.replace(/\D/g, '');
+                
+                // Limit to 8 digits (DDMMYYYY)
+                if (cleaned.length > 8) {
+                    cleaned = cleaned.substring(0, 8);
+                }
+                
+                // Format as DD/MM/YYYY
+                if (cleaned.length >= 2) {
+                    cleaned = cleaned.substring(0, 2) + '/' + cleaned.substring(2);
+                }
+                if (cleaned.length >= 5) {
+                    cleaned = cleaned.substring(0, 5) + '/' + cleaned.substring(5);
+                }
+                
+                return cleaned;
+            },
+            
+            // Smart padding for incomplete dates
+            smartPadDate: (input) => {
+                let cleaned = input.replace(/\D/g, '');
+                
+                // Handle different input lengths intelligently
+                if (cleaned.length === 6) {
+                    // DDMMYY - assume 20YY for years 00-30, 19YY for 31-99
+                    const year = parseInt(cleaned.substring(4, 6));
+                    const fullYear = year <= 30 ? '20' + cleaned.substring(4, 6) : '19' + cleaned.substring(4, 6);
+                    cleaned = cleaned.substring(0, 4) + fullYear;
+                } else if (cleaned.length === 5) {
+                    // DMMYY or DDMYY - need to determine which
+                    // If first digit > 3, assume it's DDMYY, otherwise DMMYY
+                    const firstDigit = parseInt(cleaned.charAt(0));
+                    if (firstDigit > 3) {
+                        // DDMYY format - pad month
+                        const year = parseInt(cleaned.substring(3, 5));
+                        const fullYear = year <= 30 ? '20' + cleaned.substring(3, 5) : '19' + cleaned.substring(3, 5);
+                        cleaned = cleaned.substring(0, 2) + '0' + cleaned.charAt(2) + fullYear;
+                    } else {
+                        // DMMYY format - pad day
+                        const year = parseInt(cleaned.substring(3, 5));
+                        const fullYear = year <= 30 ? '20' + cleaned.substring(3, 5) : '19' + cleaned.substring(3, 5);
+                        cleaned = '0' + cleaned.substring(0, 3) + fullYear;
+                    }
+                } else if (cleaned.length === 4) {
+                    // DMYY or MMYY - assume DMYY and pad both
+                    const year = parseInt(cleaned.substring(2, 4));
+                    const fullYear = year <= 30 ? '20' + cleaned.substring(2, 4) : '19' + cleaned.substring(2, 4);
+                    cleaned = '0' + cleaned.charAt(0) + '0' + cleaned.charAt(1) + fullYear;
+                } else if (cleaned.length === 3) {
+                    // DMY - assume current century
+                    const currentYear = new Date().getFullYear();
+                    const decade = currentYear % 10;
+                    const year = parseInt(cleaned.charAt(2));
+                    // Smart year guessing: if entered year > current decade, assume previous decade
+                    const fullYear = year > decade ? currentYear - 10 + year - decade : currentYear - decade + year;
+                    cleaned = '0' + cleaned.charAt(0) + '0' + cleaned.charAt(1) + fullYear.toString();
+                }
+                
+                return cleaned;
+            },
+            
+            // Convert DD/MM/YYYY to YYYY-MM-DD for date input
+            convertToDateInputFormat: (ddmmyyyy) => {
+                let cleaned = ddmmyyyy.replace(/\D/g, '');
+                
+                // Apply smart padding for incomplete dates
+                if (cleaned.length < 8) {
+                    cleaned = DateUtils.smartPadDate(ddmmyyyy);
+                }
+                
+                if (cleaned.length === 8) {
+                    const day = cleaned.substring(0, 2);
+                    const month = cleaned.substring(2, 4);
+                    const year = cleaned.substring(4, 8);
+                    
+                    // Validate ranges
+                    const dayNum = parseInt(day);
+                    const monthNum = parseInt(month);
+                    const yearNum = parseInt(year);
+                    
+                    if (dayNum >= 1 && dayNum <= 31 && 
+                        monthNum >= 1 && monthNum <= 12 && 
+                        yearNum >= 1960 && yearNum <= new Date().getFullYear()) {
+                        return `${year}-${month}-${day}`;
+                    }
+                }
+                return null;
+            },
+            
+            // Validate the manually entered date
+            validateManualDate: (ddmmyyyy) => {
+                let cleaned = ddmmyyyy.replace(/\D/g, '');
+                
+                // Apply smart padding for incomplete dates
+                if (cleaned.length < 8) {
+                    cleaned = DateUtils.smartPadDate(ddmmyyyy);
+                }
+                
+                if (cleaned.length !== 8) {
+                    return { valid: false, message: 'Please enter a valid date' };
+                }
+                
+                const day = parseInt(cleaned.substring(0, 2));
+                const month = parseInt(cleaned.substring(2, 4));
+                const year = parseInt(cleaned.substring(4, 8));
+                
+                // Basic range validation
+                if (day < 1 || day > 31) {
+                    return { valid: false, message: 'Please enter valid day (01-31)' };
+                }
+                if (month < 1 || month > 12) {
+                    return { valid: false, message: 'Please enter valid month (01-12)' };
+                }
+                if (year < 1960 || year > new Date().getFullYear()) {
+                    return { valid: false, message: 'Please enter valid year (1960-' + new Date().getFullYear() + ')' };
+                }
+                
+                // Create date object to check validity
+                const testDate = new Date(year, month - 1, day);
+                if (testDate.getDate() !== day || testDate.getMonth() !== (month - 1) || testDate.getFullYear() !== year) {
+                    return { valid: false, message: 'Please enter a valid date' };
+                }
+                
+                return { valid: true, paddedValue: `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}` };
             }
         };
 
@@ -703,6 +832,10 @@
             const loginStatus = document.getElementById('loginStatus');
             const progressContainer = document.getElementById('progressContainer');
             
+            // Enhanced date input handling
+            let isManualInput = false;
+            let manualDateValue = '';
+            
             function showError(message) {
                 progressContainer.classList.remove('show');
                 loginStatus.textContent = '';
@@ -729,9 +862,90 @@
             dobInput.max = DateUtils.formatDateForInput(today);
             dobInput.value = DateUtils.formatDateForInput(defaultDate);
             
+            // Enhanced date input event handlers
+            dobInput.addEventListener('focus', function() {
+                this.parentElement.classList.add('focused');
+                
+                // On mobile, change input type to text for easier manual entry
+                if (window.innerWidth < 768) {
+                    setTimeout(() => {
+                        this.type = 'text';
+                        this.placeholder = 'DD/MM/YYYY';
+                        if (manualDateValue) {
+                            this.value = manualDateValue;
+                        } else {
+                            this.value = '';
+                        }
+                        isManualInput = true;
+                    }, 100);
+                }
+            });
+            
+            dobInput.addEventListener('blur', function() {
+                this.parentElement.classList.remove('focused');
+                
+                if (isManualInput && this.value) {
+                    const validation = DateUtils.validateManualDate(this.value);
+                    if (validation.valid) {
+                        const dateInputFormat = DateUtils.convertToDateInputFormat(this.value);
+                        if (dateInputFormat) {
+                            // Store the properly formatted manual value for display
+                            manualDateValue = validation.paddedValue;
+                            // Set the actual date value for form submission
+                            this.type = 'date';
+                            this.value = dateInputFormat;
+                            hideError();
+                        } else {
+                            showError('Please enter a valid date');
+                        }
+                    } else {
+                        showError(validation.message);
+                    }
+                }
+            });
+            
+            dobInput.addEventListener('input', function() {
+                if (isManualInput) {
+                    // Format the input as user types
+                    this.value = DateUtils.formatManualInput(this.value);
+                    manualDateValue = this.value;
+                    
+                    // Hide error when user starts typing
+                    if (errorMessage.classList.contains('show')) {
+                        hideError();
+                    }
+                }
+            });
+            
+            // Prevent non-numeric input when in manual mode
+            dobInput.addEventListener('keydown', function(e) {
+                if (isManualInput) {
+                    // Allow backspace, delete, tab, escape, enter
+                    if ([8, 9, 27, 13, 46].indexOf(e.keyCode) !== -1 ||
+                        // Allow Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                        (e.keyCode === 65 && e.ctrlKey === true) ||
+                        (e.keyCode === 67 && e.ctrlKey === true) ||
+                        (e.keyCode === 86 && e.ctrlKey === true) ||
+                        (e.keyCode === 88 && e.ctrlKey === true)) {
+                        return;
+                    }
+                    // Ensure that it is a number and stop the keypress
+                    if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                        e.preventDefault();
+                    }
+                }
+            });
+            
             clearBtn.addEventListener('click', function() {
                 userIdInput.value = '';
+                
+                // Reset date input
+                isManualInput = false;
+                manualDateValue = '';
+                dobInput.type = 'date';
+                dobInput.placeholder = '';
                 dobInput.value = DateUtils.formatDateForInput(defaultDate);
+                
                 hideError();
                 updateStatus('');
                 progressContainer.classList.remove('show');
@@ -743,7 +957,22 @@
                     hideError();
                     
                     const rollNumber = userIdInput.value.trim().toUpperCase();
-                    const dobValue = dobInput.value;
+                    let dobValue = dobInput.value;
+                    
+                    // Handle manual input validation
+                    if (isManualInput && manualDateValue) {
+                        const validation = DateUtils.validateManualDate(manualDateValue);
+                        if (!validation.valid) {
+                            showError(validation.message);
+                            return;
+                        }
+                        const dateInputFormat = DateUtils.convertToDateInputFormat(manualDateValue);
+                        if (!dateInputFormat) {
+                            showError('Please enter a valid date in DD/MM/YYYY format');
+                            return;
+                        }
+                        dobValue = dateInputFormat;
+                    }
                     
                     if (!rollNumber || !dobValue) {
                         showError('Please enter both Roll Number and Date of Birth');
@@ -784,14 +1013,12 @@
                 if (errorMessage.classList.contains('show')) hideError();
             });
 
-            [userIdInput, dobInput].forEach(input => {
-                input.addEventListener('focus', function() {
-                    this.parentElement.classList.add('focused');
-                });
-                
-                input.addEventListener('blur', function() {
-                    this.parentElement.classList.remove('focused');
-                });
+            userIdInput.addEventListener('focus', function() {
+                this.parentElement.classList.add('focused');
+            });
+            
+            userIdInput.addEventListener('blur', function() {
+                this.parentElement.classList.remove('focused');
             });
 
             function checkExistingSession() {
